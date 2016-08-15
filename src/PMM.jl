@@ -146,8 +146,8 @@ end
 function sample_Zn(Xn::Vector{Float64}, bpmm::BPMM)
     ln_tmp = [(calc_ln_NB(Xn, bpmm.cmp[k]) + log(bpmm.alpha[k])) for k in 1 : bpmm.K]
     ln_tmp = ln_tmp -  logsumexp(ln_tmp)
-    Zt = categorical_sample(exp(ln_tmp))
-    return Zt
+    Zn = categorical_sample(exp(ln_tmp))
+    return Zn
 end
 
 function sample_Z_CGS(Z::Matrix{Float64}, X::Matrix{Float64}, bpmm::BPMM)

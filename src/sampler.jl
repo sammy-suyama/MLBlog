@@ -13,7 +13,6 @@ function categorical_sample(p::Vector{Float64}, N::Int)
     K = length(p)
     Z = zeros(K, N)
     Z_tmp = rand(Categorical(p), N)
-    # TODO: make it faster
     for k in 1 : K
         Z[k,find(Z_tmp.==k)] = 1
     end
