@@ -46,7 +46,7 @@ function plot_gaussian(p, Mu, Sigma, col)
     P1 = a*cos(w)
     P2 = b*sin(w)
     P = Mu .+ vec'*vcat(P1', P2')
-    p[:plot](P[1, :]', P[2, :]', "-", color=col)
+    p[:plot](P[1, :], P[2, :], "-", color=col)
 end
     
 function main()
