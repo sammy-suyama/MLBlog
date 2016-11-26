@@ -67,6 +67,44 @@ function init_Z(X::Matrix{Float64}, bpmm::BPMM)
     return Z
 end
 
+function calc_bound(X::Matrix{Float64}, pri::BPMM, pos::BPMM)
+    ln_expt_Z = update_Z(pos, X)
+    expt_Z = exp(ln_expt_Z)
+    K, N = size(expt_Z)
+    D = size(X, 1)
+
+    expt_ln_lambda = zeros(D, K)
+    expt_lambda = zeros(D, K)
+    expt_lik = 0
+    for k in 1 : K
+        expt_ln_lambda[:,k] = digamma(pos.cmp[k].a) - log(pos.cmp[k].b)
+        expt_lambda[:,k] = pos.cmp[k].a / pos.cmp[k].b
+        for n in 1 : N
+            expt_lik += expt_Z[k,n] * (X[:, n]' * expt_ln_lambda[:,k]
+                                       - sum(expt_lambda[:,k]) - sum(lgamma(X[:,n]+1)))[1]
+        end
+    end
+    
+    expt_ln_pZ = sum(expt_Z' * (digamma(pos.alpha) - digamma(sum(pos.alpha))))
+    expt_ln_qZ = sum(expt_Z .* ln_expt_Z)
+    
+    KL_lambda = 0
+    for k in 1 : K
+        KL_lambda += (sum(pos.cmp[k].a)*log(pos.cmp[k].b) - sum(pri.cmp[k].a)*log(pri.cmp[k].b)
+                      - sum(lgamma(pos.cmp[k].a)) + sum(lgamma(pri.cmp[k].a))
+                      + (pos.cmp[k].a - pri.cmp[k].a)' * expt_ln_lambda[:,k]
+                      + (pri.cmp[k].b - pos.cmp[k].b) * sum(expt_lambda[:,k])
+                      )[1]
+    end
+    KL_pi = (lgamma(sum(pos.alpha)) - lgamma(sum(pri.alpha))
+             - sum(lgamma(pos.alpha)) + sum(lgamma(pri.alpha))
+             + (pos.alpha - pri.alpha)' * (digamma(pos.alpha) - digamma(sum(pos.alpha)))
+             )[1]
+    
+    VB = expt_lik + expt_ln_pZ - expt_ln_qZ - (KL_lambda + KL_pi)
+    return VB
+end
+
 function add_stats(bpmm::BPMM, X::Matrix{Float64}, Z::Matrix{Float64})
     D = bpmm.D
     K = bpmm.K
@@ -90,7 +128,7 @@ remove_stats(bpmm::BPMM, X::Matrix{Float64}, Z::Matrix{Float64}) = add_stats(bpm
 function update_Z(bpmm::BPMM, X::Matrix{Float64})
     D, N = size(X)
     K = bpmm.K
-    Z_expt = zeros(K, N)
+    ln_expt_Z = zeros(K, N)
     tmp = zeros(K)
 
     sum_digamma_tmp = digamma(sum(bpmm.alpha))
@@ -101,9 +139,9 @@ function update_Z(bpmm::BPMM, X::Matrix{Float64})
     ln_lambda_X = [X'*(digamma(bpmm.cmp[k].a) - log(bpmm.cmp[k].b)) for k in 1 : K]
     for n in 1 : N
         tmp_ln_pi =  [tmp[k] + ln_lambda_X[k][n] for k in 1 : K]
-        Z_expt[:,n] = exp(tmp_ln_pi - logsumexp(tmp_ln_pi))
+        ln_expt_Z[:,n] = tmp_ln_pi - logsumexp(tmp_ln_pi)
     end
-    return Z_expt
+    return ln_expt_Z
 end
 
 function winner_takes_all(Z::Matrix{Float64})
@@ -171,20 +209,23 @@ function learn_BPMM_VI(X::Matrix{Float64}, prior_bpmm::BPMM, max_iter::Int)
     ## for Bayesian Poisson Mixture Model
 
     # initialisation
-    Z_expt = init_Z(X, prior_bpmm)
-    bpmm = add_stats(prior_bpmm, X, Z_expt)
+    expt_Z = init_Z(X, prior_bpmm)
+    bpmm = add_stats(prior_bpmm, X, expt_Z)
+    VB = NaN * zeros(max_iter)
 
     # inference
     for i in 1 : max_iter
         # E-step
-        Z_expt = update_Z(bpmm, X)
+        expt_Z = exp(update_Z(bpmm, X))
         # M-step
-        bpmm = add_stats(prior_bpmm, X, Z_expt)
+        bpmm = add_stats(prior_bpmm, X, expt_Z)
+        # calc VB
+        VB[i] = calc_bound(X, prior_bpmm, bpmm)
     end
 
     # assign binary values
-    Z = winner_takes_all(Z_expt)
-    return Z, bpmm
+    Z = winner_takes_all(expt_Z)
+    return Z, bpmm, VB
 end
 
 function learn_BPMM_GS(X::Matrix{Float64}, prior_bpmm::BPMM, max_iter::Int)
@@ -194,7 +235,8 @@ function learn_BPMM_GS(X::Matrix{Float64}, prior_bpmm::BPMM, max_iter::Int)
     # initialisation
     Z = init_Z(X, prior_bpmm)
     bpmm = add_stats(prior_bpmm, X, Z)
-
+    VB = NaN * zeros(max_iter)
+    
     # inference
     for i in 1 : max_iter            
         # sample parameters
@@ -203,9 +245,11 @@ function learn_BPMM_GS(X::Matrix{Float64}, prior_bpmm::BPMM, max_iter::Int)
         Z = sample_Z_GS(pmm, X)
         # update current model
         bpmm = add_stats(prior_bpmm, X, Z)
+        # calc VB
+        VB[i] = calc_bound(X, prior_bpmm, bpmm)
     end
 
-    return Z, bpmm
+    return Z, bpmm, VB
 end
 
 function learn_BPMM_CGS(X::Matrix{Float64}, prior_bpmm::BPMM, max_iter::Int)
@@ -215,13 +259,16 @@ function learn_BPMM_CGS(X::Matrix{Float64}, prior_bpmm::BPMM, max_iter::Int)
     # initialisation
     Z = init_Z(X, prior_bpmm)
     bpmm = add_stats(prior_bpmm, X, Z)
+    VB = NaN * zeros(max_iter)
 
     # inference
     for i in 1 : max_iter
         # directly sample Z
         Z, bpmm = sample_Z_CGS(Z, X, bpmm)
+        # calc VB
+        VB[i] = calc_bound(X, prior_bpmm, bpmm)
     end
 
-    return Z, bpmm
+    return Z, bpmm, VB
 end
 
