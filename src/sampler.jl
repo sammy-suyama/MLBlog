@@ -19,6 +19,14 @@ function categorical_sample(p::Vector{Float64}, N::Int)
     return Z
 end
 
+function gw_sample(beta::Float64, m::Vector{Float64}, nu::Float64, W::Matrix{Float64})
+    # sample Lambda
+    Lambda = rand(Wishart(nu, W))
+    # sample mu
+    mu =  rand(MvNormal(m, inv(beta*Lambda)))
+    return mu, Lambda
+end
+
 function poisson_sample(lambda::Float64, N::Int)
     X = rand(Poisson(lambda), N)
     return X
