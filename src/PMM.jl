@@ -224,7 +224,8 @@ function learn_BPMM_VI(X::Matrix{Float64}, prior_bpmm::BPMM, max_iter::Int)
     end
 
     # assign binary values
-    Z = winner_takes_all(expt_Z)
+    #Z = winner_takes_all(expt_Z)
+    Z = expt_Z
     return Z, bpmm, VB
 end
 

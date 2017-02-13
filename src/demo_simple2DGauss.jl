@@ -1,8 +1,10 @@
 ###################################
-## Simple Variational Inference
+## Simple VI & GS
 ## for 2D Gaussian
 
 using PyPlot
+using Distributions
+
 
 function calc_KL(mu1, lambda1, mu2, lambda2)
     D = size(mu1, 1)
@@ -25,8 +27,8 @@ function plot_results(result, truth)
                 p[:set_title](@sprintf("%d of %d", n, N))
                 plot_gaussian(p, result[n][1], result[n][2], "b", "p(z)")
                 plot_gaussian(p, truth[1], truth[2], "r", "q(z)")
-                p[:set_xlim]([-1.5, 1.0])
-                p[:set_ylim]([-0.6, 0.8])
+                #p[:set_xlim]([-1.5, 1.0])
+                #p[:set_ylim]([-0.6, 0.8])
             end
         end
     end
@@ -51,7 +53,7 @@ function plot_gaussian(p, Mu, Sigma, col, label)
     p[:plot](P[1, :]', P[2, :]', "-", color=col, label=label)
 end
         
-function main()
+function main_VI()
     ## creat truth distribution
     D = 2 # dimension
     theta = 2.0*pi/12 # tilt
@@ -72,6 +74,7 @@ function main()
     for i in 1 : max_iter
         ## update
         mu_h[1] = mu[1] - inv(lambda[1,1])*lambda[1,2] * (mu_h[2] - mu[2])
+        
         lambda_h[1,1] = lambda[1,1]
         mu_h[2] = mu[2] - inv(lambda[2,2])*lambda[2,1] * (mu_h[1] - mu[1])
         lambda_h[2,2] = lambda[2,2]
@@ -101,6 +104,73 @@ function main()
     ax[:set_ylabel]("KL divergence")
     ax[:set_xlabel]("iteration")
     show()
+
+
 end
 
-main()
+function plot_lines(ax, X)
+    D, N = size(X)
+    X_d = zeros(D, 2*N + 1)
+    X_d[:,1] = X[:,1]
+    for i in 1 : N
+        X_d[1, 2*i - 1] = X[1, i]
+        X_d[1, 2*i] = X[1, i]
+        X_d[2, 2*i] = X[2, i]
+        X_d[2, 2*i + 1] = X[2, i]
+    end
+    ax[:plot](X[1,:], X[2,:], "oy")
+    ax[:plot](X_d[1,1:2*N]', X_d[2,1:2*N]', "--y")
+end
+
+function main_GS()
+    ## creat truth distribution
+    D = 2 # dimension
+    theta = 2.0*pi/12 # tilt
+    A = reshape([cos(theta), -sin(theta),
+                 sin(theta), cos(theta)],
+                2, 2)
+    mu = [0.0, 0.0]
+    lambda = inv(A * inv(reshape([1,0,0,100], 2, 2)) * A')
+
+    ## initialize
+    max_iter = 1000
+    X = randn(D, max_iter)
+    mu_h = randn(D)
+    
+    ## main iteration
+    KL = NaN * ones(max_iter)
+    for i in 2 : max_iter
+        ## update
+        mu_h[1] = mu[1] - inv(lambda[1,1])*lambda[1,2] * (X[2,i-1] - mu[2])
+        X[1, i] = rand(Normal(mu_h[1], sqrt(inv(lambda[1,1]))))
+        
+        mu_h[2] = mu[2] - inv(lambda[2,2])*lambda[2,1] * (X[1,i] - mu[1])
+        X[2, i] = rand(Normal(mu_h[2], sqrt(inv(lambda[2,2]))))        
+        
+        if i > 2
+            KL[i] = calc_KL(mean(X[:,1:i], 2), inv(cov(X[:,1:i], 2)), mu, lambda)
+        end
+    end
+    
+    ## visualize results
+    expt_mu = mean(X, 2)
+    expt_Sigma = cov(X, 2)
+
+    f, ax = subplots(1, 1)
+    plot_lines(ax, X)
+    plot_gaussian(ax, mu, inv(lambda), "b", latexstring("\$p(z)\$"))
+    plot_gaussian(ax, expt_mu, expt_Sigma, "r", latexstring("\$q(z)\$"))
+    ax[:set_xlabel](latexstring("\$z_1\$"), fontsize=16)
+    ax[:set_ylabel](latexstring("\$z_2\$"), fontsize=16)
+    ax[:legend](fontsize=16)
+    
+    ## KL divergence
+    f, ax = subplots(1)
+    ax[:plot](1:max_iter, KL)
+    ax[:set_ylabel]("KL divergence")
+    ax[:set_xlabel]("sample size")
+    show()
+end
+
+#main_VI()
+main_GS()
