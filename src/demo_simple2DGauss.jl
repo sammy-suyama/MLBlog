@@ -25,8 +25,8 @@ function plot_results(result, truth)
             if n <= N
                 p = ax[i, j]
                 p[:set_title](@sprintf("%d of %d", n, N))
-                plot_gaussian(p, result[n][1], result[n][2], "b", "p(z)")
-                plot_gaussian(p, truth[1], truth[2], "r", "q(z)")
+                plot_gaussian(p, truth[1], truth[2], "b", "q(z)")
+                plot_gaussian(p, result[n][1], result[n][2], "r", "p(z)")
                 #p[:set_xlim]([-1.5, 1.0])
                 #p[:set_ylim]([-0.6, 0.8])
             end
@@ -64,7 +64,8 @@ function main_VI()
     lambda = inv(A * inv(reshape([1,0,0,10], 2, 2)) * A')
     
     ## initialize
-    mu_h = randn(D)
+    #mu_h = randn(D)
+    mu_h = [-0.5, 0.3]
     lambda_h = zeros(D,D)
     
     ## main iteration
@@ -88,24 +89,38 @@ function main_VI()
         push!(result, (deepcopy(mu_h), deepcopy(inv(lambda_h))))
     end
 
-    ## visualize results
-    plot_results(result, (mu, inv(lambda)))
+    if false
+        ## visualize results
+        plot_results(result, (mu, inv(lambda)))
+        
+        f, ax = subplots(1, 1)
+        plot_gaussian(ax, result[end][1], result[end][2], "b", latexstring("\$q(z)\$"))
+        plot_gaussian(ax, mu, inv(lambda), "r", latexstring("\$p(z)\$"))
+        ax[:set_xlabel](latexstring("\$z_1\$"), fontsize=20)
+        ax[:set_ylabel](latexstring("\$z_2\$"), fontsize=20)
+        ax[:legend](fontsize=16)
+    end
 
-    f, ax = subplots(1, 1)
-    plot_gaussian(ax, mu, inv(lambda), "b", latexstring("\$p(z)\$"))
-    plot_gaussian(ax, result[end][1], result[end][2], "r", latexstring("\$q(z)\$"))
-    ax[:set_xlabel](latexstring("\$z_1\$"), fontsize=16)
-    ax[:set_ylabel](latexstring("\$z_2\$"), fontsize=16)
-    ax[:legend](fontsize=16)
-    
     ## KL divergence
     f, ax = subplots(1)
     ax[:plot](1:max_iter, KL)
-    ax[:set_ylabel]("KL divergence")
-    ax[:set_xlabel]("iteration")
+    ax[:set_ylabel]("KL divergence", fontsize=16)
+    ax[:set_xlabel]("iteration", fontsize=16)
     show()
 
-
+    ## for book
+    tmp_list = [1, 3, 5, 10]
+    f, ax = subplots(2, 2)
+    for i in 1 : 2
+        for j in 1 : 2
+            n = (i - 1) * 2 + j
+            p = ax[i, j]
+            #p[:set_title](@sprintf("%d of %d", tmp_list[n], max_iter), fontsize=16)
+            p[:text](0.25, 0.40, @sprintf("%d of %d", tmp_list[n], max_iter), fontsize=16)
+            plot_gaussian(p, mu, inv(lambda), "b", "q(z)")
+            plot_gaussian(p, result[tmp_list[n]][1], result[tmp_list[n]][2], "r", "p(z)")
+        end
+    end
 end
 
 function plot_lines(ax, X)
@@ -130,10 +145,12 @@ function main_GS()
                  sin(theta), cos(theta)],
                 2, 2)
     mu = [0.0, 0.0]
+    #lambda = inv(A * inv(reshape([1,0,0,10], 2, 2)) * A')
     lambda = inv(A * inv(reshape([1,0,0,100], 2, 2)) * A')
 
     ## initialize
-    max_iter = 1000
+    #max_iter = 1000
+    max_iter = 30
     X = randn(D, max_iter)
     mu_h = randn(D)
     
@@ -158,17 +175,17 @@ function main_GS()
 
     f, ax = subplots(1, 1)
     plot_lines(ax, X)
-    plot_gaussian(ax, mu, inv(lambda), "b", latexstring("\$p(z)\$"))
-    plot_gaussian(ax, expt_mu, expt_Sigma, "r", latexstring("\$q(z)\$"))
-    ax[:set_xlabel](latexstring("\$z_1\$"), fontsize=16)
-    ax[:set_ylabel](latexstring("\$z_2\$"), fontsize=16)
-    ax[:legend](fontsize=16)
+    plot_gaussian(ax, mu, inv(lambda), "b", latexstring("\$p(\\bf{x})\$"))
+    plot_gaussian(ax, expt_mu, expt_Sigma, "r", latexstring("\$q(\\bf{x})\$"))
+    ax[:set_xlabel](latexstring("\$x_1\$"), fontsize=24)
+    ax[:set_ylabel](latexstring("\$x_2\$"), fontsize=24)
+    ax[:legend](fontsize=20)
     
     ## KL divergence
     f, ax = subplots(1)
     ax[:plot](1:max_iter, KL)
-    ax[:set_ylabel]("KL divergence")
-    ax[:set_xlabel]("sample size")
+    ax[:set_ylabel]("KL divergence", fontsize=16)
+    ax[:set_xlabel]("sample size", fontsize=16)
     show()
 end
 
