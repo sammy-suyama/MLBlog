@@ -3,8 +3,8 @@
 
 module PoissonMixtureModel
 
-import StatsFuns.logsumexp
-include("sampler.jl")
+using StatsFuns.logsumexp
+#include("sampler.jl")
 
 export Gam, BPMM, Poi, PMM
 export sample_PMM, sample_data, winner_takes_all
@@ -81,12 +81,12 @@ function calc_bound(X::Matrix{Float64}, pri::BPMM, pos::BPMM)
 
     expt_ln_lambda = zeros(D, K)
     expt_lambda = zeros(D, K)
-    expt_lik = 0
+    expt_ln_lkh = 0
     for k in 1 : K
         expt_ln_lambda[:,k] = digamma(pos.cmp[k].a) - log(pos.cmp[k].b)
         expt_lambda[:,k] = pos.cmp[k].a / pos.cmp[k].b
         for n in 1 : N
-            expt_lik += expt_S[k,n] * (X[:, n]' * expt_ln_lambda[:,k]
+            expt_ln_lkh += expt_S[k,n] * (X[:, n]' * expt_ln_lambda[:,k]
                                        - sum(expt_lambda[:,k]) - sum(lgamma(X[:,n]+1)))[1]
         end
     end
@@ -107,7 +107,7 @@ function calc_bound(X::Matrix{Float64}, pri::BPMM, pos::BPMM)
              + (pos.alpha - pri.alpha)' * (digamma(pos.alpha) - digamma(sum(pos.alpha)))
              )[1]
     
-    VB = expt_lik + expt_ln_pS - expt_ln_qS - (KL_lambda + KL_pi)
+    VB = expt_ln_lkh + expt_ln_pS - expt_ln_qS - (KL_lambda + KL_pi)
     return VB
 end
 
